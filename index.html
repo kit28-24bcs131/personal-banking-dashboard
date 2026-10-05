@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerly – Personal Banking Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1ec;--panel:#fbfcfa;--ink:#16243b;--mute:#5f6b7a;--line:#d5dbd2;--in:#1f7a5c;--out:#b4442f;--accent:#16243b}
+@media (prefers-color-scheme:dark){:root{--bg:#10171f;--panel:#17212c;--ink:#e6ebe4;--mute:#97a3b0;--line:#2a3745;--in:#58c49b;--out:#e88a74;--accent:#e6ebe4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Instrument Sans",system-ui,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 56px}
+header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.02em}
+header span{color:var(--mute)}
+.total{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:24px}
+.total small{color:var(--mute)}
+.total .amt{font-size:clamp(38px,8vw,64px);font-weight:700;letter-spacing:-.04em;line-height:1.05}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px}
+h2{font-size:15px;margin:0 0 14px;font-weight:600}
+.acct{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line)}
+.acct:first-of-type{border-top:0}
+.acct small{display:block;color:var(--mute)}
+.num{font-variant-numeric:tabular-nums;font-weight:600}
+.cat{margin-bottom:12px}
+.cat div{display:flex;justify-content:space-between}
+.bar{height:8px;background:var(--line);border-radius:4px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink)}
+.full{grid-column:1/-1}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+input{flex:1;min-width:160px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:460px}
+th{text-align:left;font-weight:500;color:var(--mute);padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line)}
+td.r,th.r{text-align:right}
+.in{color:var(--in)}.out{color:var(--out)}
+.empty{color:var(--mute);padding:18px 6px}
+svg text{fill:var(--mute);font-size:11px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Ledgerly</h1><span id="today"></span></header>
+
+  <div class="total"><small>Total balance</small><div class="amt" id="total"></div></div>
+
+  <div class="grid">
+    <section><h2>Accounts</h2><div id="accounts"></div></section>
+    <section><h2>Spending by category this month</h2><div id="cats"></div></section>
+    <section class="full"><h2>Money in and out, last 6 months</h2><svg id="flow" viewBox="0 0 640 180" width="100%" role="img" aria-label="Monthly income and spending"></svg></section>
+    <section class="full">
+      <h2>Transactions</h2>
+      <div class="tools">
+        <input id="q" type="search" placeholder="Search transactions" aria-label="Search transactions">
+        <select id="f" aria-label="Filter by category"></select>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const money=n=>(n<0?"-":"")+"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const accounts=[
+  {name:"Everyday Checking",note:"•••• 4821",bal:48250.75},
+  {name:"Savings",note:"•••• 1093",bal:215400.00},
+  {name:"Credit Card",note:"•••• 7740",bal:-12380.40}
+];
+const tx=[
+  ["2026-10-03","Salary – Acme Pvt Ltd","Income",85000],
+  ["2026-10-03","Rent","Housing",-22000],
+  ["2026-10-02","Big Basket","Groceries",-3240.5],
+  ["2026-10-02","Swiggy","Dining",-640],
+  ["2026-10-01","Electricity bill","Utilities",-1860],
+  ["2026-09-30","Uber","Transport",-420],
+  ["2026-09-29","Netflix","Entertainment",-649],
+  ["2026-09-28","Fuel","Transport",-2100],
+  ["2026-09-27","Freelance payment","Income",12000],
+  ["2026-09-26","Cafe Coffee Day","Dining",-380],
+  ["2026-09-25","Pharmacy","Health",-870]
+].map(([date,desc,cat,amt])=>({date,desc,cat,amt}));
+const flow=[["May",78,61],["Jun",80,66],["Jul",82,58],["Aug",85,72],["Sep",97,64],["Oct",85,31]]; // [month, in, out] in thousands
+
+document.getElementById("today").textContent=new Date().toLocaleDateString("en-IN",{dateStyle:"long"});
+document.getElementById("total").textContent=money(accounts.reduce((s,a)=>s+a.bal,0));
+document.getElementById("accounts").innerHTML=accounts.map(a=>
+  `<div class="acct"><div>${a.name}<small>${a.note}</small></div><div class="num ${a.bal<0?"out":""}">${money(a.bal)}</div></div>`).join("");
+
+// Spending by category (October, expenses only)
+const spend={};
+tx.filter(t=>t.amt<0&&t.date.startsWith("2026-10")).forEach(t=>spend[t.cat]=(spend[t.cat]||0)-t.amt);
+const max=Math.max(...Object.values(spend));
+document.getElementById("cats").innerHTML=Object.entries(spend).sort((a,b)=>b[1]-a[1]).map(([c,v])=>
+  `<div class="cat"><div><span>${c}</span><span class="num">${money(v)}</span></div><div class="bar"><i style="width:${v/max*100}%"></i></div></div>`).join("");
+
+// Cash flow chart
+const svg=document.getElementById("flow");let s="";
+flow.forEach(([m,i,o],k)=>{
+  const x=k*105+20,h=v=>v/100*130;
+  s+=`<rect x="${x}" y="${150-h(i)}" width="30" height="${h(i)}" fill="var(--in)" rx="2"><title>${m} in: ₹${i}k</title></rect>`;
+  s+=`<rect x="${x+34}" y="${150-h(o)}" width="30" height="${h(o)}" fill="var(--out)" rx="2"><title>${m} out: ₹${o}k</title></rect>`;
+  s+=`<text x="${x+32}" y="170" text-anchor="middle">${m}</text>`;
+});
+svg.innerHTML=s+`<text x="636" y="12" text-anchor="end">Green: in · Red: out (₹ thousands)</text>`;
+
+// Transactions
+const cats=["All categories",...new Set(tx.map(t=>t.cat))];
+const f=document.getElementById("f"),q=document.getElementById("q"),rows=document.getElementById("rows");
+f.innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+function render(){
+  const term=q.value.trim().toLowerCase();
+  const list=tx.filter(t=>(f.value==="All categories"||t.cat===f.value)&&t.desc.toLowerCase().includes(term));
+  rows.innerHTML=list.length?list.map(t=>
+    `<tr><td>${new Date(t.date).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</td><td>${t.desc}</td><td>${t.cat}</td><td class="r num ${t.amt>0?"in":"out"}">${t.amt>0?"+":""}${money(t.amt)}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="empty">No transactions match. Clear the search or pick another category.</td></tr>`;
+}
+q.addEventListener("input",render);f.addEventListener("change",render);render();
+</script>
+</body>
+</html>
